@@ -1,47 +1,74 @@
 #include "ESP8266WiFi.h"
-String ssid="";
+#include "xxtea-iot-crypt.h"//https://github.com/boseji/xxtea-lib
+
+//constantes
+const int canal=2;
 int pinD6=12;
+scan_config scan = {
+          NULL,                         //SSID
+          NULL,                         //bssid
+          canal,                         //channel
+          false                         //hide channels
+      };
+   
+//variables
+String ssid="";
+
 void setup()
 {
-  Serial.begin(115200);
-  Serial.println();
-  pinMode(pinD6,OUTPUT);
-
-  WiFi.mode(WIFI_STA);
-  WiFi.disconnect();
-  delay(100);
+  Serial.begin(115200);             //Frecuencia Serial
+  pinMode(pinD6,OUTPUT);            //Configuración como puerto de salida
+  WiFi.mode(WIFI_STA);              //Configuramos wifi como estación
+  WiFi.disconnect();                //Desconexión de cualquier red conectada
+  delay(100);                   
+  xxtea.setKey("8K0DANJuGUawTuSv"); //Clave desencriptación
 }
+
+//callback llamado tras cada escaneo
+static  void  ICACHE_FLASH_ATTR scan_done(void *arg, STATUS  status){
+
+    struct  bss_info  *bss_link = (struct bss_info  *)arg;
+    ssid="";
+    if(bss_link!=NULL){
+        
+        while (bss_link != NULL) {
+
+          String value((char*)bss_link->ssid);
+          if(xxtea.decrypt(value)!="-FAIL-"){
+            ssid=xxtea.decrypt(value);
+            if(ssid.startsWith("LDR")){
+                break;
+             }
+           }
+           bss_link = bss_link->next.stqe_next;
+       } 
+    }
+}
+
+
 
 void loop()
 {
-  
-  int n = WiFi.scanNetworks();
+    wifi_station_scan(&scan, scan_done); //función de escaneo con las propiedades de configuración del struct scan, al finalizar llama a la función scan_done
 
-  for (int i = 0; i < n; i++)
-  {
-    ssid=WiFi.SSID(i);
-    String cabeza=ssid.substring(0,11);
-    String dato=ssid.substring(11);
-    if(cabeza=="PruebaWifi-"){
+    if(!ssid.equals("")){
 
-       if (dato.toInt() > 900){
+      int datoInt =  ssid.substring(4).toInt();
+
+      if (datoInt > 70){
         
-    digitalWrite(pinD6, LOW);  //Turn led off
+        digitalWrite(pinD6, LOW);  
     
-  }
-  else{
-           
-
-    digitalWrite(pinD6, HIGH); //Turn led on
-    
-  }
+      }else{
+          digitalWrite(pinD6, HIGH); 
+        }
+        
     }
-    Serial.println(cabeza);
-    
-    Serial.println(dato);
+  
+  delay(100);
+  
 
-  }
-  Serial.println();
-
-  //delay(1000);
+ 
 }
+
+
